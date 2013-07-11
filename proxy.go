@@ -1,41 +1,57 @@
 package main
 
-import "log"
+import "bufio"
+import "container/list"
+import "io"
 import "net"
+import "strings"
 
-func connect(from net.Conn, to net.Conn) {
-    println("Connecting", from, "to", to)
-    for {
-        buffer := make([]byte, 512)
-        read, error := from.Read(buffer)
+func doHTTPProxy(downstream net.Conn) {
+    println("In doHTTPProxy")
+
+    println("Reading headers")
+    reader := bufio.NewReader(downstream)
+    hostname := ""
+    readLines := list.New()
+    for hostname == "" {
+        bytes, _, error := reader.ReadLine()
         if error != nil {
-            log.Fatal(error)
+            println("Error reading")
             return
         }
-        data := buffer[0:read]
-        println("Read", data, "from", from)
-        _, error = to.Write(data)
-        if error != nil {
-            println("Error writing", error)
+        line := string(bytes)
+        println("Read ", line)
+        readLines.PushBack(line)
+        if strings.HasPrefix(line, "Host: ") {
+            hostname = strings.TrimPrefix(line, "Host: ")
+            println("Found host header:", hostname)
+            break
         }
-        println("Written", data, "to", to)
-        
     }
-}
-
-func doProxy(downstream net.Conn) {
-    println("In doProxy")
+    if hostname == "" {
+        println("No host!")
+        return
+    }
 
     println("Connecting to downstream")
-    upstream, error := net.Dial("tcp", "www.google.com:80")
+    upstream, error := net.Dial("tcp", hostname + ":80")
     if error != nil {
         println("Couldn't connect to upstream", error)
         return
     }
     println("Connected to downstream", downstream, upstream)
 
-    go connect(downstream, upstream)
-    go connect(upstream, downstream)
+    println("Replaying headers we've already received")
+    for element := readLines.Front(); element != nil; element = element.Next() {
+        line := element.Value.(string)
+        upstream.Write([]byte(line))
+        upstream.Write([]byte("\n"))
+        println("Sent ", line)
+    }
+    println("Replayed headers, connecting for full proxying")
+
+    go io.Copy(upstream, reader)
+    go io.Copy(downstream, upstream)
 }
 
 
@@ -53,6 +69,6 @@ func main() {
         }
 
         println("New connection", connection)
-        go doProxy(connection)
+        go doHTTPProxy(connection)
     }
 }
