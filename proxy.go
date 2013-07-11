@@ -6,7 +6,7 @@ import "io"
 import "net"
 import "strings"
 
-func doHTTPProxy(downstream net.Conn) {
+func handleHTTPConnection(downstream net.Conn) {
     reader := bufio.NewReader(downstream)
     hostname := ""
     readLines := list.New()
@@ -45,7 +45,7 @@ func doHTTPProxy(downstream net.Conn) {
 }
 
 
-func main() {
+func doHTTPProxy(done chan int) {
     listener, error := net.Listen("tcp", "0.0.0.0:80")
     if error != nil {
         println("Couldn't start listening", error)
@@ -58,6 +58,15 @@ func main() {
             return
         }
 
-        go doHTTPProxy(connection)
+        go handleHTTPConnection(connection)
     }
+    done <- 1
+}
+
+
+func main() {
+    httpDone := make(chan int)
+    go doHTTPProxy(httpDone)
+
+    <- httpDone
 }
