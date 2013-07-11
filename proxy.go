@@ -49,7 +49,7 @@ func handleHTTPConnection(downstream net.Conn) {
 }
 
 
-func doHTTPProxy(done chan int, port int, handle func(net.Conn)) {
+func doProxy(done chan int, port int, handle func(net.Conn)) {
     listener, error := net.Listen("tcp", "0.0.0.0:" + strconv.Itoa(port))
     if error != nil {
         println("Couldn't start listening", error)
@@ -70,7 +70,7 @@ func doHTTPProxy(done chan int, port int, handle func(net.Conn)) {
 
 func main() {
     httpDone := make(chan int)
-    go doHTTPProxy(httpDone, 80, handleHTTPConnection)
+    go doProxy(httpDone, 80, handleHTTPConnection)
 
     <- httpDone
 }
