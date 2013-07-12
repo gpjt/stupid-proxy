@@ -50,6 +50,42 @@ func handleHTTPConnection(downstream net.Conn) {
 
 
 func handleHTTPSConnection(downstream net.Conn) {
+    firstByte := make([]byte, 1)
+    _, error := downstream.Read(firstByte)
+    if error != nil {
+        println("Couldn't read first byte :-(")
+        return
+    }
+    if firstByte[0] != 0x16 {
+        println("Not TLS :-(")
+    }
+
+    versionBytes := make([]byte, 2)
+    _, error = downstream.Read(versionBytes)
+    if error != nil {
+        println("Couldn't read version bytes :-(")
+        return
+    }
+    if versionBytes[0] < 3 || (versionBytes[0] == 3 && versionBytes[1] < 1) {
+        println("SSL < 3.1 so it's still not TLS")
+        return
+    }
+
+    lengthBytes := make([]byte, 2)
+    _, error = downstream.Read(lengthBytes)
+    if error != nil {
+        println("Couldn't read length bytes :-(")
+        return
+    }
+    length := (lengthBytes[0] << 8) + (lengthBytes[1])
+    println("Length is", length)
+    
+    rest := make([]byte, length)
+    _, error = downstream.Read(rest)
+    if error != nil {
+        println("Couldn't read rest of bytes")
+        return
+    }
 }
 
 
