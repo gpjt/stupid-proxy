@@ -4,6 +4,7 @@ import (
     "bufio"
     "container/list"
     "io"
+    "log"
     "net"
     "strconv"
     "strings"
@@ -32,6 +33,7 @@ func handleHTTPConnection(downstream net.Conn) {
         return
     }
 
+    println("Making upstream connection to", hostname + ":80")
     upstream, error := net.Dial("tcp", hostname + ":80")
     if error != nil {
         println("Couldn't connect to upstream", error)
@@ -71,21 +73,110 @@ func handleHTTPSConnection(downstream net.Conn) {
         return
     }
 
-    lengthBytes := make([]byte, 2)
-    _, error = downstream.Read(lengthBytes)
+    restLengthBytes := make([]byte, 2)
+    _, error = downstream.Read(restLengthBytes)
     if error != nil {
-        println("Couldn't read length bytes :-(")
+        println("Couldn't read restLength bytes :-(")
         return
     }
-    length := (lengthBytes[0] << 8) + (lengthBytes[1])
-    println("Length is", length)
+    restLength := (int(restLengthBytes[0]) << 8) + int(restLengthBytes[1])
+    println("restLength is", restLength)
     
-    rest := make([]byte, length)
+    rest := make([]byte, restLength)
     _, error = downstream.Read(rest)
     if error != nil {
         println("Couldn't read rest of bytes")
         return
     }
+
+    current := 0
+
+    handshakeType := rest[0]
+    current += 1
+    if handshakeType != 0x1 {
+        println("Not a ClientHello")
+        return
+    }
+
+    // Skip over another length
+    current += 3
+    // Skip over protocolversion
+    println("Protocolversion is", rest[current], rest[current+1])
+    current += 2
+    // Skip over random number
+    current += 4 + 28
+    // Skip over session ID
+    sessionIDLength := int(rest[current])
+    current += 1
+    println("session ID length", sessionIDLength)
+    current += sessionIDLength
+    
+    cipherSuiteLength := (int(rest[current]) << 8) + int(rest[current + 1])
+    current += 2
+    println("CipherSuite length is", cipherSuiteLength)
+    current += cipherSuiteLength
+
+    compressionMethodLength := int(rest[current])
+    current += 1
+    println("CompressionMethodLength is", compressionMethodLength)
+    current += compressionMethodLength
+
+    if current > restLength {
+        println("no extensions")
+        return
+    }
+
+    extensionsLength := (int(rest[current]) << 8) + int(rest[current + 1])
+    current += 2
+    println("ExtensionsLength", extensionsLength)
+
+    hostname := ""
+    for current < restLength && hostname == "" {
+        extensionType := (int(rest[current]) << 8) + int(rest[current + 1])
+        current += 2
+        println("Extension type", extensionType)
+   
+        extensionDataLength := (int(rest[current]) << 8) + int(rest[current + 1])
+        current += 2
+        println("Extension data length", extensionDataLength)
+        
+        if extensionType == 0 {
+            println("It's an SNI")
+            nameType := rest[current]
+            current += 1
+            if nameType != 0 {
+                println("Not a hostname") 
+                return
+            }
+            nameLen := int(rest[current])
+            current += 1
+            println("Name length", nameLen)
+            hostname = string(rest[current:current + nameLen])
+            println("got a name:", hostname)
+        } else {
+            println("Not an SNI")
+        }
+
+        current += extensionDataLength
+    }
+    if hostname == "" {
+        println("No hostname")
+        return
+    }
+    
+    println("Connecting via TCP to", hostname + ":443")
+    upstream, error := net.Dial("tcp", hostname + ":443")
+    if error != nil {
+        log.Fatal(error)
+        return
+    }
+
+    upstream.Write(firstByte)
+    upstream.Write(versionBytes)
+    upstream.Write(rest)
+
+    go io.Copy(upstream, downstream)
+    go io.Copy(downstream, upstream)
 }
 
 
