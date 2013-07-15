@@ -12,11 +12,6 @@ import (
 
 
 func getBackend(hostname string) string {
-    println("Getting backend for '", hostname, "'")
-    ba := []byte(hostname)
-    for i:=0; i < len(ba); i++ {
-        println("Byte", i, "is", ba[i])
-    }
     if hostname == "www.dilbert.com" {
         return "184.106.169.31"
     } else if hostname == "www.gilesthomas.com" {
@@ -50,7 +45,6 @@ func handleHTTPConnection(downstream net.Conn) {
     }
     backendAddress := getBackend(hostname)
 
-    println("Making upstream connection to", backendAddress + ":80")
     upstream, error := net.Dial("tcp", backendAddress + ":80")
     if error != nil {
         println("Couldn't connect to upstream", error)
@@ -97,7 +91,6 @@ func handleHTTPSConnection(downstream net.Conn) {
         return
     }
     restLength := (int(restLengthBytes[0]) << 8) + int(restLengthBytes[1])
-    println("restLength is", restLength)
     
     rest := make([]byte, restLength)
     _, error = downstream.Read(rest)
@@ -118,24 +111,20 @@ func handleHTTPSConnection(downstream net.Conn) {
     // Skip over another length
     current += 3
     // Skip over protocolversion
-    println("Protocolversion is", rest[current], rest[current+1])
     current += 2
     // Skip over random number
     current += 4 + 28
     // Skip over session ID
     sessionIDLength := int(rest[current])
     current += 1
-    println("session ID length", sessionIDLength)
     current += sessionIDLength
     
     cipherSuiteLength := (int(rest[current]) << 8) + int(rest[current + 1])
     current += 2
-    println("CipherSuite length is", cipherSuiteLength)
     current += cipherSuiteLength
 
     compressionMethodLength := int(rest[current])
     current += 1
-    println("CompressionMethodLength is", compressionMethodLength)
     current += compressionMethodLength
 
     if current > restLength {
@@ -143,22 +132,19 @@ func handleHTTPSConnection(downstream net.Conn) {
         return
     }
 
-    extensionsLength := (int(rest[current]) << 8) + int(rest[current + 1])
+    // Skip over extensionsLength
+    // extensionsLength := (int(rest[current]) << 8) + int(rest[current + 1])
     current += 2
-    println("ExtensionsLength", extensionsLength)
 
     hostname := ""
     for current < restLength && hostname == "" {
         extensionType := (int(rest[current]) << 8) + int(rest[current + 1])
         current += 2
-        println("Extension type", extensionType)
    
         extensionDataLength := (int(rest[current]) << 8) + int(rest[current + 1])
         current += 2
-        println("Extension data length", extensionDataLength)
         
         if extensionType == 0 {
-            println("It's an SNI")
 
             // Skip over number of names as we're assuming there's just one
             current += 2
@@ -171,11 +157,7 @@ func handleHTTPSConnection(downstream net.Conn) {
             }
             nameLen := (int(rest[current]) << 8) + int(rest[current+1])
             current += 2
-            println("Name length", nameLen)
             hostname = string(rest[current:current + nameLen])
-            println("got a name:", hostname)
-        } else {
-            println("Not an SNI")
         }
 
         current += extensionDataLength
@@ -186,20 +168,17 @@ func handleHTTPSConnection(downstream net.Conn) {
     }
     
     backendAddress := getBackend(hostname)
-    println("Connecting via TCP to", backendAddress + ":443")
     upstream, error := net.Dial("tcp", backendAddress + ":443")
     if error != nil {
         log.Fatal(error)
         return
     }
-    println("Connected, replaying header")
 
     upstream.Write(firstByte)
     upstream.Write(versionBytes)
     upstream.Write(restLengthBytes)
     upstream.Write(rest)
 
-    println("Header replayed, going live")
     go io.Copy(upstream, downstream)
     go io.Copy(downstream, upstream)
 }
