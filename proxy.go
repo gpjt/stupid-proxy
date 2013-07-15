@@ -196,6 +196,7 @@ func handleHTTPSConnection(downstream net.Conn) {
 
     upstream.Write(firstByte)
     upstream.Write(versionBytes)
+    upstream.Write(restLengthBytes)
     upstream.Write(rest)
 
     println("Header replayed, going live")
