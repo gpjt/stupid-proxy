@@ -3,9 +3,12 @@ package main
 import (
     "bufio"
     "container/list"
+    "fmt"
+    "github.com/fzzy/radix/redis"
     "io"
     "log"
     "net"
+    "os"
     "strconv"
     "strings"
 )
@@ -184,7 +187,7 @@ func handleHTTPSConnection(downstream net.Conn) {
 }
 
 
-func doProxy(done chan int, port int, handle func(net.Conn)) {
+func doProxy(done chan int, port int, handle func(net.Conn), redisClient *redis.Client) {
     listener, error := net.Listen("tcp", "0.0.0.0:" + strconv.Itoa(port))
     if error != nil {
         println("Couldn't start listening", error)
@@ -204,11 +207,17 @@ func doProxy(done chan int, port int, handle func(net.Conn)) {
 
 
 func main() {
+    redisClient, error := redis.Dial("tcp", "127.0.0.1:6379")
+    if error != nil {
+        fmt.Println("Error connecting to redis", error)
+        os.Exit(1)
+    }
+
     httpDone := make(chan int)
-    go doProxy(httpDone, 80, handleHTTPConnection)
+    go doProxy(httpDone, 80, handleHTTPConnection, redisClient)
 
     httpsDone := make(chan int)
-    go doProxy(httpsDone, 443, handleHTTPSConnection)
+    go doProxy(httpsDone, 443, handleHTTPSConnection, redisClient)
 
     <- httpDone
     <- httpsDone
