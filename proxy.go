@@ -11,6 +11,22 @@ import (
 )
 
 
+func getBackend(hostname string) string {
+    println("Getting backend for '", hostname, "'")
+    ba := []byte(hostname)
+    for i:=0; i < len(ba); i++ {
+        println("Byte", i, "is", ba[i])
+    }
+    if hostname == "www.dilbert.com" {
+        return "184.106.169.31"
+    } else if hostname == "www.gilesthomas.com" {
+        return "212.110.190.213"
+    } else if hostname == "www.pythonanywhere.com" {
+        return "50.19.109.98"
+    }
+    return "8.8.8.8"
+}
+
 func handleHTTPConnection(downstream net.Conn) {
     reader := bufio.NewReader(downstream)
     hostname := ""
@@ -32,9 +48,10 @@ func handleHTTPConnection(downstream net.Conn) {
         println("No host!")
         return
     }
+    backendAddress := getBackend(hostname)
 
-    println("Making upstream connection to", hostname + ":80")
-    upstream, error := net.Dial("tcp", hostname + ":80")
+    println("Making upstream connection to", backendAddress + ":80")
+    upstream, error := net.Dial("tcp", backendAddress + ":80")
     if error != nil {
         println("Couldn't connect to upstream", error)
         return
@@ -142,14 +159,18 @@ func handleHTTPSConnection(downstream net.Conn) {
         
         if extensionType == 0 {
             println("It's an SNI")
+
+            // Skip over number of names as we're assuming there's just one
+            current += 2
+
             nameType := rest[current]
             current += 1
             if nameType != 0 {
                 println("Not a hostname") 
                 return
             }
-            nameLen := int(rest[current])
-            current += 1
+            nameLen := (int(rest[current]) << 8) + int(rest[current+1])
+            current += 2
             println("Name length", nameLen)
             hostname = string(rest[current:current + nameLen])
             println("got a name:", hostname)
@@ -164,17 +185,20 @@ func handleHTTPSConnection(downstream net.Conn) {
         return
     }
     
-    println("Connecting via TCP to", hostname + ":443")
-    upstream, error := net.Dial("tcp", hostname + ":443")
+    backendAddress := getBackend(hostname)
+    println("Connecting via TCP to", backendAddress + ":443")
+    upstream, error := net.Dial("tcp", backendAddress + ":443")
     if error != nil {
         log.Fatal(error)
         return
     }
+    println("Connected, replaying header")
 
     upstream.Write(firstByte)
     upstream.Write(versionBytes)
     upstream.Write(rest)
 
+    println("Header replayed, going live")
     go io.Copy(upstream, downstream)
     go io.Copy(downstream, upstream)
 }
