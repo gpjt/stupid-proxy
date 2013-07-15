@@ -14,7 +14,13 @@ import (
 )
 
 
-func getBackend(hostname string) string {
+func getBackend(hostname string, redisClient *redis.Client) string {
+    println("Looking up", hostname)
+    backends, error := redisClient.Cmd("smembers", "hostnames:" + hostname + ":backends").List()
+    if error != nil {
+        fmt.Println("Error in redis lookup", error)
+    }
+    fmt.Println("Found backends:", backends)
     if hostname == "www.dilbert.com" {
         return "184.106.169.31"
     } else if hostname == "www.gilesthomas.com" {
@@ -25,7 +31,7 @@ func getBackend(hostname string) string {
     return "8.8.8.8"
 }
 
-func handleHTTPConnection(downstream net.Conn) {
+func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
     reader := bufio.NewReader(downstream)
     hostname := ""
     readLines := list.New()
@@ -46,7 +52,7 @@ func handleHTTPConnection(downstream net.Conn) {
         println("No host!")
         return
     }
-    backendAddress := getBackend(hostname)
+    backendAddress := getBackend(hostname, redisClient)
 
     upstream, error := net.Dial("tcp", backendAddress + ":80")
     if error != nil {
@@ -65,7 +71,7 @@ func handleHTTPConnection(downstream net.Conn) {
 }
 
 
-func handleHTTPSConnection(downstream net.Conn) {
+func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     firstByte := make([]byte, 1)
     _, error := downstream.Read(firstByte)
     if error != nil {
@@ -170,7 +176,7 @@ func handleHTTPSConnection(downstream net.Conn) {
         return
     }
     
-    backendAddress := getBackend(hostname)
+    backendAddress := getBackend(hostname, redisClient)
     upstream, error := net.Dial("tcp", backendAddress + ":443")
     if error != nil {
         log.Fatal(error)
@@ -187,20 +193,20 @@ func handleHTTPSConnection(downstream net.Conn) {
 }
 
 
-func doProxy(done chan int, port int, handle func(net.Conn), redisClient *redis.Client) {
+func doProxy(done chan int, port int, handle func(net.Conn, *redis.Client), redisClient *redis.Client) {
     listener, error := net.Listen("tcp", "0.0.0.0:" + strconv.Itoa(port))
     if error != nil {
-        println("Couldn't start listening", error)
+        fmt.Println("Couldn't start listening", error)
     }
     println("Started proxy on", port, "-- listening...")
     for {
         connection, error := listener.Accept()
         if error != nil {
-            println("Accept error", error)
+            fmt.Println("Accept error", error)
             return
         }
 
-        go handle(connection)
+        go handle(connection, redisClient)
     }
     done <- 1
 }
