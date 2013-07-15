@@ -9,9 +9,11 @@ import (
     "log"
     "net"
     "os"
+    "math/rand"
     "strconv"
     "strings"
 )
+
 
 
 func getBackend(hostname string, redisClient *redis.Client) string {
@@ -21,14 +23,8 @@ func getBackend(hostname string, redisClient *redis.Client) string {
         fmt.Println("Error in redis lookup", error)
     }
     fmt.Println("Found backends:", backends)
-    if hostname == "www.dilbert.com" {
-        return "184.106.169.31"
-    } else if hostname == "www.gilesthomas.com" {
-        return "212.110.190.213"
-    } else if hostname == "www.pythonanywhere.com" {
-        return "50.19.109.98"
-    }
-    return "8.8.8.8"
+    backend := backends[int(rand.Float32() * float32(len(backends)))]
+    return backend
 }
 
 func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
