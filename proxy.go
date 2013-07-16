@@ -17,7 +17,7 @@ import (
 
 
 func getBackend(hostname string, redisClient *redis.Client) string {
-    println("Looking up", hostname)
+    fmt.Println("Looking up", hostname)
     backends, error := redisClient.Cmd("smembers", "hostnames:" + hostname + ":backends").List()
     if error != nil {
         fmt.Println("Error in redis lookup", error)
@@ -34,7 +34,7 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
     for hostname == "" {
         bytes, _, error := reader.ReadLine()
         if error != nil {
-            println("Error reading")
+            fmt.Println("Error reading")
             return
         }
         line := string(bytes)
@@ -45,14 +45,14 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
         }
     }
     if hostname == "" {
-        println("No host!")
+        fmt.Println("No host!")
         return
     }
     backendAddress := getBackend(hostname, redisClient)
 
     upstream, error := net.Dial("tcp", backendAddress + ":80")
     if error != nil {
-        println("Couldn't connect to upstream", error)
+        fmt.Println("Couldn't connect to upstream", error)
         return
     }
 
@@ -71,28 +71,28 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     firstByte := make([]byte, 1)
     _, error := downstream.Read(firstByte)
     if error != nil {
-        println("Couldn't read first byte :-(")
+        fmt.Println("Couldn't read first byte :-(")
         return
     }
     if firstByte[0] != 0x16 {
-        println("Not TLS :-(")
+        fmt.Println("Not TLS :-(")
     }
 
     versionBytes := make([]byte, 2)
     _, error = downstream.Read(versionBytes)
     if error != nil {
-        println("Couldn't read version bytes :-(")
+        fmt.Println("Couldn't read version bytes :-(")
         return
     }
     if versionBytes[0] < 3 || (versionBytes[0] == 3 && versionBytes[1] < 1) {
-        println("SSL < 3.1 so it's still not TLS")
+        fmt.Println("SSL < 3.1 so it's still not TLS")
         return
     }
 
     restLengthBytes := make([]byte, 2)
     _, error = downstream.Read(restLengthBytes)
     if error != nil {
-        println("Couldn't read restLength bytes :-(")
+        fmt.Println("Couldn't read restLength bytes :-(")
         return
     }
     restLength := (int(restLengthBytes[0]) << 8) + int(restLengthBytes[1])
@@ -100,7 +100,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     rest := make([]byte, restLength)
     _, error = downstream.Read(rest)
     if error != nil {
-        println("Couldn't read rest of bytes")
+        fmt.Println("Couldn't read rest of bytes")
         return
     }
 
@@ -109,7 +109,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     handshakeType := rest[0]
     current += 1
     if handshakeType != 0x1 {
-        println("Not a ClientHello")
+        fmt.Println("Not a ClientHello")
         return
     }
 
@@ -133,7 +133,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     current += compressionMethodLength
 
     if current > restLength {
-        println("no extensions")
+        fmt.Println("no extensions")
         return
     }
 
@@ -157,7 +157,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
             nameType := rest[current]
             current += 1
             if nameType != 0 {
-                println("Not a hostname") 
+                fmt.Println("Not a hostname") 
                 return
             }
             nameLen := (int(rest[current]) << 8) + int(rest[current+1])
@@ -168,7 +168,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
         current += extensionDataLength
     }
     if hostname == "" {
-        println("No hostname")
+        fmt.Println("No hostname")
         return
     }
     
@@ -194,7 +194,7 @@ func doProxy(done chan int, port int, handle func(net.Conn, *redis.Client), redi
     if error != nil {
         fmt.Println("Couldn't start listening", error)
     }
-    println("Started proxy on", port, "-- listening...")
+    fmt.Println("Started proxy on", port, "-- listening...")
     for {
         connection, error := listener.Accept()
         if error != nil {
