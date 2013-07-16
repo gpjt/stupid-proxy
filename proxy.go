@@ -3,6 +3,7 @@ package main
 import (
     "bufio"
     "container/list"
+    "errors"
     "fmt"
     "github.com/fzzy/radix/redis"
     "io"
@@ -16,16 +17,32 @@ import (
 
 
 
-func getBackend(hostname string, redisClient *redis.Client) string {
+func getBackend(hostname string, fallback string, redisClient *redis.Client) (string, error) {
     fmt.Println("Looking up", hostname)
+
     backends, error := redisClient.Cmd("smembers", "hostnames:" + hostname + ":backends").List()
     if error != nil {
         fmt.Println("Error in redis lookup", error)
+        return "", error
     }
+
+    if len(backends) == 0 {
+        backends, error = redisClient.Cmd("smembers", "hostnames:" + fallback + ":backends").List()
+        if len(backends) == 0 {
+            fmt.Println("No fallback of type", fallback)
+            return "", errors.New("Could not find fallback of type " + fallback)
+        }
+    }
+    if error != nil {
+        fmt.Println("Error in redis lookup", error)
+        return "", error
+    }
+
     fmt.Println("Found backends:", backends)
     backend := backends[int(rand.Float32() * float32(len(backends)))]
-    return backend
+    return backend, nil
 }
+
 
 func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
     reader := bufio.NewReader(downstream)
@@ -48,7 +65,11 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
         fmt.Println("No host!")
         return
     }
-    backendAddress := getBackend(hostname, redisClient)
+    backendAddress, error := getBackend(hostname, "httpFallback", redisClient)
+    if error != nil {
+        fmt.Println("Couldn't get backend for ", hostname, "-- got error", error)
+        return
+    }
 
     upstream, error := net.Dial("tcp", backendAddress + ":80")
     if error != nil {
@@ -172,7 +193,12 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
         return
     }
     
-    backendAddress := getBackend(hostname, redisClient)
+    backendAddress, error := getBackend(hostname, "httpsFallback", redisClient)
+    if error != nil {
+        fmt.Println("Couldn't get backend for ", hostname, "-- got error", error)
+        return
+    }
+
     upstream, error := net.Dial("tcp", backendAddress + ":443")
     if error != nil {
         log.Fatal(error)
