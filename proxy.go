@@ -44,6 +44,12 @@ func getBackend(hostname string, defaultBackendType string, redisClient *redis.C
 }
 
 
+func copyAndClose(dst io.WriteCloser, src io.Reader) {
+    io.Copy(dst, src)
+    dst.Close()
+}
+
+
 func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
     reader := bufio.NewReader(downstream)
     hostname := ""
@@ -86,8 +92,8 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
         upstream.Write([]byte("\n"))
     }
 
-    go io.Copy(upstream, reader)
-    go io.Copy(downstream, upstream)
+    go copyAndClose(upstream, reader)
+    go copyAndClose(downstream, upstream)
 }
 
 
@@ -213,8 +219,8 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     upstream.Write(restLengthBytes)
     upstream.Write(rest)
 
-    go io.Copy(upstream, downstream)
-    go io.Copy(downstream, upstream)
+    go copyAndClose(upstream, reader)
+    go copyAndClose(downstream, upstream)
 }
 
 
