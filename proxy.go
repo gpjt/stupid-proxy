@@ -17,7 +17,7 @@ import (
 
 
 
-func getBackend(hostname string, fallback string, redisClient *redis.Client) (string, error) {
+func getBackend(hostname string, defaultBackendType string, redisClient *redis.Client) (string, error) {
     fmt.Println("Looking up", hostname)
 
     backends, error := redisClient.Cmd("smembers", "hostnames:" + hostname + ":backends").List()
@@ -27,10 +27,10 @@ func getBackend(hostname string, fallback string, redisClient *redis.Client) (st
     }
 
     if len(backends) == 0 {
-        backends, error = redisClient.Cmd("smembers", "hostnames:" + fallback + ":backends").List()
+        backends, error = redisClient.Cmd("smembers", "hostnames:" + defaultBackendType + ":backends").List()
         if len(backends) == 0 {
-            fmt.Println("No fallback of type", fallback)
-            return "", errors.New("Could not find fallback of type " + fallback)
+            fmt.Println("No default backend of type", defaultBackendType)
+            return "", errors.New("Could not find default backend of type " + defaultBackendType)
         }
     }
     if error != nil {
@@ -65,7 +65,7 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
         fmt.Println("No host!")
         return
     }
-    backendAddress, error := getBackend(hostname, "httpFallback", redisClient)
+    backendAddress, error := getBackend(hostname, "httpDefault", redisClient)
     if error != nil {
         fmt.Println("Couldn't get backend for ", hostname, "-- got error", error)
         return
@@ -193,7 +193,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
         return
     }
     
-    backendAddress, error := getBackend(hostname, "httpsFallback", redisClient)
+    backendAddress, error := getBackend(hostname, "httpsDefault", redisClient)
     if error != nil {
         fmt.Println("Couldn't get backend for ", hostname, "-- got error", error)
         return
