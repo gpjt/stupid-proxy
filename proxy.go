@@ -22,20 +22,20 @@ func getBackend(hostname string, defaultBackendType string, redisClient *redis.C
 
     backends, error := redisClient.Cmd("smembers", "hostnames:" + hostname + ":backends").List()
     if error != nil {
-        fmt.Println("Error in redis lookup", error)
+        fmt.Println("Error in redis lookup for hostname backend", error)
         return "", error
     }
 
     if len(backends) == 0 {
         backends, error = redisClient.Cmd("smembers", "hostnames:" + defaultBackendType + ":backends").List()
+        if error != nil {
+            fmt.Println("Error in redis lookup for default backend", error)
+            return "", error
+        }
         if len(backends) == 0 {
             fmt.Println("No default backend of type", defaultBackendType)
             return "", errors.New("Could not find default backend of type " + defaultBackendType)
         }
-    }
-    if error != nil {
-        fmt.Println("Error in redis lookup", error)
-        return "", error
     }
 
     fmt.Println("Found backends:", backends)
