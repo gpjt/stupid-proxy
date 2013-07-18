@@ -22,4 +22,7 @@ the whole client connection is sent down to the appropriate port on that backend
 proxy will keep proxying data back and forth until one of the endpoints closes the 
 connection.
 
+Uses Juhani Åhman's radix client to access redis: https://github.com/fzzy/radix
+
+
 MIT licensed, in case you're crazy enough to want to use it for something :-)
