@@ -52,28 +52,31 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
         bytes, _, error := reader.ReadLine()
         if error != nil {
             fmt.Println("Error reading", error)
+            downstream.Close()
             return
         }
         line := string(bytes)
         readLines.PushBack(line)
+        if line == "" {
+            // End of HTTP headers
+            break
+        }
         if strings.HasPrefix(line, "Host: ") {
             hostname = strings.TrimPrefix(line, "Host: ")
             break
         }
     }
-    if hostname == "" {
-        fmt.Println("No host!")
-        return
-    }
     backendAddress, error := getBackend(hostname, "httpDefault", redisClient)
     if error != nil {
         fmt.Println("Couldn't get backend for ", hostname, "-- got error", error)
+        downstream.Close()
         return
     }
 
     upstream, error := net.Dial("tcp", backendAddress + ":80")
     if error != nil {
-        fmt.Println("Couldn't connect to upstream", error)
+        fmt.Println("Couldn't connect to backend", error)
+        downstream.Close()
         return
     }
 
