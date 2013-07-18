@@ -21,3 +21,5 @@ A backend is then selected at random from the list that was supplied by redis, a
 the whole client connection is sent down to the appropriate port on that backend. The
 proxy will keep proxying data back and forth until one of the endpoints closes the 
 connection.
+
+MIT licensed, in case you're crazy enough to want to use it for something :-)
