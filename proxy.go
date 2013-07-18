@@ -219,7 +219,7 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
     upstream.Write(restLengthBytes)
     upstream.Write(rest)
 
-    go copyAndClose(upstream, reader)
+    go copyAndClose(upstream, downstream)
     go copyAndClose(downstream, upstream)
 }
 
