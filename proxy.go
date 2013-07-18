@@ -51,7 +51,7 @@ func handleHTTPConnection(downstream net.Conn, redisClient *redis.Client) {
     for hostname == "" {
         bytes, _, error := reader.ReadLine()
         if error != nil {
-            fmt.Println("Error reading")
+            fmt.Println("Error reading", error)
             return
         }
         line := string(bytes)
@@ -215,10 +215,18 @@ func handleHTTPSConnection(downstream net.Conn, redisClient *redis.Client) {
 }
 
 
+func reportDone(done chan int) {
+    done <- 1
+}
+
+
 func doProxy(done chan int, port int, handle func(net.Conn, *redis.Client), redisClient *redis.Client) {
+    defer reportDone(done)
+
     listener, error := net.Listen("tcp", "0.0.0.0:" + strconv.Itoa(port))
     if error != nil {
         fmt.Println("Couldn't start listening", error)
+        return
     }
     fmt.Println("Started proxy on", port, "-- listening...")
     for {
@@ -230,7 +238,6 @@ func doProxy(done chan int, port int, handle func(net.Conn, *redis.Client), redi
 
         go handle(connection, redisClient)
     }
-    done <- 1
 }
 
 
