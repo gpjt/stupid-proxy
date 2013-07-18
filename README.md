@@ -18,6 +18,6 @@ for HTTPS.  If these latter two lookups fail or return empty sets, it will drop
 the connection.
 
 A backend is then selected at random from the list that was supplied by redis, and
-the whole client connection is sent down to the appropriate port on that backend.  
-The proxy will keep proxying data back and forth until one of the endpoints closes
-the connection.
+the whole client connection is sent down to the appropriate port on that backend. The
+proxy will keep proxying data back and forth until one of the endpoints closes the 
+connection.
